@@ -7,6 +7,8 @@
 
 // Path to the INI file
 WCHAR g_szINIPath[MAX_PATH + 1] = { '\0' };
+// Path to the music root folder.
+WCHAR g_szMusicRootPath[PREF_BUFFER_SIZE] = { '\0' };
 // Path the file containing the paths of all tracks we want to play.
 WCHAR g_szTracksFilePath[PREF_BUFFER_SIZE] = { '\0' };
 // Path the file containing the paths of all tracks that have been specifically requested.
@@ -85,6 +87,10 @@ void SetStopThreshold(WCHAR* pszPrefLine) {
 	SetInt(pszPrefLine, L"stopamplitudethreshold", &g_nStopThreshold, 0, 32767);
 }
 
+void SetMusicRootPath(WCHAR* pszPrefLine) {
+	SetString(pszPrefLine, L"musicrootpath", g_szMusicRootPath);
+}
+
 void SetTracksFilePath(WCHAR* pszPrefLine) {
 	SetString(pszPrefLine, L"tracksfilepath", g_szTracksFilePath);
 }
@@ -115,6 +121,7 @@ bool ReadPrefs() {
 			while (fgetws(szBuffer, PREF_BUFFER_SIZE, pFile)) {
 				_wcslwr_s(szBuffer);
 				TrimLeading(szBuffer);
+				SetMusicRootPath(szBuffer);
 				SetTracksFilePath(szBuffer);
 				SetRequestedTracksFilePath(szBuffer);
 				SetStartThreshold(szBuffer);

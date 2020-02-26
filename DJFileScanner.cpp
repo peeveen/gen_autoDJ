@@ -6,6 +6,7 @@
 #include <mfreadwrite.h>
 #include <mferror.h>
 #include "DJDefs.h"
+#include "DJPrefs.h"
 
 void Normalize(short* pWavData, int channels, DWORD cbSize) {
   int max = 0, min = 0;
@@ -117,7 +118,7 @@ bool GetStartStopPositions(const WCHAR *pszFilename, StartStopPositions* pSSPos)
                         short* pWavData = (short*)pData;
                         cbWavData /= sizeof(short);
                         Normalize(pWavData, channels, cbWavData);
-                        GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, 10000, 15000,pSSPos);
+                        GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, g_nStopThreshold,pSSPos);
                         result = true;
                         free(pWavData);
                       }

@@ -40,16 +40,22 @@ void CheckForInterruption() {
 	const WCHAR* fileBeingPlayed = (const WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
 	// If it's a different file from what we're expecting it to be, then the real DJ has
 	// started something manually. We need to calculate a new stop time.
-	if (fileBeingPlayed && wcscmp(g_pszNowPlayingPath, fileBeingPlayed))
+	if (fileBeingPlayed && _wcsicmp(g_pszNowPlayingPath, fileBeingPlayed))
 		GetStartStopPositions(fileBeingPlayed, &g_startStopPositions);
 }
 
 void PlayNextTrack() {
 	WCHAR* pszTrackPath = GetNextTrack();
-	GetStartStopPositions(pszTrackPath, &g_startStopPositions);
+	WCHAR szBuffer[MAX_PATH + 1];
+	wcscpy_s(szBuffer, g_szMusicRootPath);
+	int len = wcslen(szBuffer);
+	if(szBuffer[len-1]!='\\')
+		wcscat_s(szBuffer, L"\\");
+	wcscat_s(szBuffer, pszTrackPath);
+	wcscpy_s(g_pszNowPlayingPath, szBuffer);
+	GetStartStopPositions(szBuffer, &g_startStopPositions);
 	enqueueFileWithMetaStructW w;
-	w.filename = pszTrackPath;
-	wcscpy_s(g_pszNowPlayingPath, pszTrackPath);
+	w.filename = szBuffer;
 	w.length = 100;
 	w.title = pszTrackPath;
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
@@ -109,7 +115,6 @@ LRESULT CALLBACK AutoDJWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		}
 		break;
 	}
-	// Call Winamp Window Proc
 	return ::CallWindowProc(g_pOriginalWndProc, hwnd, uMsg, wParam, lParam);
 }
 

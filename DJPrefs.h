@@ -4,6 +4,7 @@
 bool ReadPrefs();
 
 extern WCHAR g_szINIPath[];
+extern WCHAR g_szMusicRootPath[];
 extern WCHAR g_szTracksFilePath[];
 extern WCHAR g_szRequestedTracksFilePath[];
 extern int g_nStartThreshold;
