@@ -37,8 +37,10 @@ void WriteTrackFile(const WCHAR* pszPath, WCHAR** ppszList, int nCount) {
 	errno_t error = _wfopen_s(&pFile, pszPath, L"wt");
 	if (pFile && !error) {
 		for (int f = 0; f < nCount; ++f) {
-			if(ppszList[f])
+			if (ppszList[f]) {
 				fputws(ppszList[f], pFile);
+				fputws(L"\n", pFile);
+			}
 		}
 		fclose(pFile);
 	}
@@ -50,7 +52,7 @@ WCHAR* GetNextRequestedTrack() {
 	ReadTrackFile(g_szRequestedTracksFilePath, &ppszRequestedTrackPaths, &nRequestedTracks);
 	if (nRequestedTracks) {
 		srand((UINT)time(NULL));
-		int nTrackIndex = rand() % nRequestedTracks;
+		int nTrackIndex = 0; // rand() % nRequestedTracks;
 		WCHAR* pszTrack = _wcsdup(ppszRequestedTrackPaths[nTrackIndex]);
 		free(ppszRequestedTrackPaths[nTrackIndex]);
 		ppszRequestedTrackPaths[nTrackIndex] = NULL;
@@ -80,13 +82,15 @@ WCHAR* GetNextTrack() {
 			FreeTrackList();
 			ReadTrackList();
 		}
-		srand((UINT)time(NULL));
-		int nTrackIndex = rand() % g_nTracks;
-		pszTrack = _wcsdup(g_ppszTrackPaths[nTrackIndex]);
-		free(g_ppszTrackPaths[nTrackIndex]);
-		g_ppszTrackPaths[nTrackIndex] = NULL;
-		memcpy(g_ppszTrackPaths + nTrackIndex, g_ppszTrackPaths + nTrackIndex + 1, sizeof(WCHAR *) * ((g_nTracks - nTrackIndex)-1));
-		--g_nTracks;
+		if (g_nTracks) {
+			srand((UINT)time(NULL));
+			int nTrackIndex = rand() % g_nTracks;
+			pszTrack = _wcsdup(g_ppszTrackPaths[nTrackIndex]);
+			free(g_ppszTrackPaths[nTrackIndex]);
+			g_ppszTrackPaths[nTrackIndex] = NULL;
+			memcpy(g_ppszTrackPaths + nTrackIndex, g_ppszTrackPaths + nTrackIndex + 1, sizeof(WCHAR*) * ((g_nTracks - nTrackIndex) - 1));
+			--g_nTracks;
+		}
 	}
 	return pszTrack;
 }

@@ -55,7 +55,7 @@ void GetStartStopPositions(short* pWavData, int channels, UINT64 bytesPerSecond,
   }
 }
 
-bool GetStartStopPositions(const WCHAR *pszFilename, StartStopPositions* pSSPos) {
+bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, StartStopPositions* pSSPos) {
   bool result = false;
   IMFSourceReader* pReader = NULL;
   HRESULT hr = ::MFCreateSourceReaderFromURL(pszFilename, NULL, &pReader);
@@ -118,7 +118,7 @@ bool GetStartStopPositions(const WCHAR *pszFilename, StartStopPositions* pSSPos)
                         short* pWavData = (short*)pData;
                         cbWavData /= sizeof(short);
                         Normalize(pWavData, channels, cbWavData);
-                        GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, g_nStopThreshold,pSSPos);
+                        GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke?g_nKaraokeStopThreshold:g_nStopThreshold,pSSPos);
                         result = true;
                         free(pWavData);
                       }

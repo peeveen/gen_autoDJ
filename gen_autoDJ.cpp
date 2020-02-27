@@ -3,6 +3,8 @@
 #include <combaseapi.h>
 #include <mfapi.h>
 #include <shellapi.h>
+#include <sys/types.h>
+#include <wchar.h>
 #include <malloc.h>
 #include "DJDefs.h"
 #include "DJPrefs.h"
@@ -36,33 +38,40 @@ HANDLE g_hTimeWatcherThread = NULL;
 HANDLE g_hStopTimeWatcherEvent = NULL;
 
 void CheckForInterruption() {
-	int listPos = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
+	LRESULT listPos = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
 	const WCHAR* fileBeingPlayed = (const WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
 	// If it's a different file from what we're expecting it to be, then the real DJ has
 	// started something manually. We need to calculate a new stop time.
-	if (fileBeingPlayed && _wcsicmp(g_pszNowPlayingPath, fileBeingPlayed))
-		GetStartStopPositions(fileBeingPlayed, &g_startStopPositions);
+	if (fileBeingPlayed && _wcsicmp(g_pszNowPlayingPath, fileBeingPlayed)) {
+		bool isKaraoke = false;
+		WCHAR szCDGTest[MAX_PATH + 1];
+		wcscpy_s(szCDGTest, fileBeingPlayed);
+		WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
+		if (pszLastDot) {
+			wcscpy_s(pszLastDot, (MAX_PATH -(pszLastDot-szCDGTest)),L".cdg");
+			struct _stat64i32 stat;
+			if (!_wstat(szCDGTest, &stat))
+				isKaraoke = true;
+		}
+		GetStartStopPositions(fileBeingPlayed, isKaraoke, &g_startStopPositions);
+	}
 }
 
 void PlayNextTrack() {
 	WCHAR* pszTrackPath = GetNextTrack();
-	WCHAR szBuffer[MAX_PATH + 1];
-	wcscpy_s(szBuffer, g_szMusicRootPath);
-	int len = wcslen(szBuffer);
-	if(szBuffer[len-1]!='\\')
-		wcscat_s(szBuffer, L"\\");
-	wcscat_s(szBuffer, pszTrackPath);
-	wcscpy_s(g_pszNowPlayingPath, szBuffer);
-	GetStartStopPositions(szBuffer, &g_startStopPositions);
-	enqueueFileWithMetaStructW w;
-	w.filename = szBuffer;
-	w.length = 100;
-	w.title = pszTrackPath;
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, g_startStopPositions.startPos, IPC_JUMPTOTIME);
-	free(pszTrackPath);
+	if (pszTrackPath) {
+		wcscpy_s(g_pszNowPlayingPath, pszTrackPath);
+		GetStartStopPositions(pszTrackPath, false,&g_startStopPositions);
+		enqueueFileWithMetaStructW w;
+		w.filename = pszTrackPath;
+		w.length = 100;
+		w.title = pszTrackPath;
+		::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
+		::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
+		::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
+		::SendMessage(g_hWinampWindow, WM_WA_IPC, g_startStopPositions.startPos, IPC_JUMPTOTIME);
+		free(pszTrackPath);
+	}
 }
 
 DWORD WINAPI TimeWatcher(LPVOID pParam) {

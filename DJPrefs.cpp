@@ -7,8 +7,6 @@
 
 // Path to the INI file
 WCHAR g_szINIPath[MAX_PATH + 1] = { '\0' };
-// Path to the music root folder.
-WCHAR g_szMusicRootPath[PREF_BUFFER_SIZE] = { '\0' };
 // Path the file containing the paths of all tracks we want to play.
 WCHAR g_szTracksFilePath[PREF_BUFFER_SIZE] = { '\0' };
 // Path the file containing the paths of all tracks that have been specifically requested.
@@ -17,6 +15,8 @@ WCHAR g_szRequestedTracksFilePath[PREF_BUFFER_SIZE] = { '\0' };
 int g_nStartThreshold = 10000;
 // Amplitude point at which to stop songs.
 int g_nStopThreshold = 15000;
+// Amplitude point at which to stop karaoke songs.
+int g_nKaraokeStopThreshold = 4000;
 // Stupid scaler for WinAmp time bug.
 double g_nTimeScaler = 1.00466;
 
@@ -28,7 +28,7 @@ void TrimLeading(WCHAR* pszString) {
 }
 
 void SetPref(WCHAR* pszPrefLine, const WCHAR* pszPrefName, void* pDestVal, void (*pFunc)(const WCHAR*, void*)) {
-	int len = wcslen(pszPrefName);
+	size_t len = wcslen(pszPrefName);
 	if (!wcsncmp(pszPrefLine, pszPrefName, len)) {
 		wcscpy_s(pszPrefLine, PREF_BUFFER_SIZE, pszPrefLine + len);
 		TrimLeading(pszPrefLine);
@@ -87,8 +87,8 @@ void SetStopThreshold(WCHAR* pszPrefLine) {
 	SetInt(pszPrefLine, L"stopamplitudethreshold", &g_nStopThreshold, 0, 32767);
 }
 
-void SetMusicRootPath(WCHAR* pszPrefLine) {
-	SetString(pszPrefLine, L"musicrootpath", g_szMusicRootPath);
+void SetKaraokeStopThreshold(WCHAR* pszPrefLine) {
+	SetInt(pszPrefLine, L"karaokestopamplitudethreshold", &g_nKaraokeStopThreshold, 0, 32767);
 }
 
 void SetTracksFilePath(WCHAR* pszPrefLine) {
@@ -121,11 +121,11 @@ bool ReadPrefs() {
 			while (fgetws(szBuffer, PREF_BUFFER_SIZE, pFile)) {
 				_wcslwr_s(szBuffer);
 				TrimLeading(szBuffer);
-				SetMusicRootPath(szBuffer);
 				SetTracksFilePath(szBuffer);
 				SetRequestedTracksFilePath(szBuffer);
 				SetStartThreshold(szBuffer);
 				SetStopThreshold(szBuffer);
+				SetKaraokeStopThreshold(szBuffer);
 			}
 			fclose(pFile);
 			return true;
