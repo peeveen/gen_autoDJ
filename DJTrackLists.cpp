@@ -13,22 +13,28 @@ void ReadTrackFile(const WCHAR* pszPath, WCHAR*** pppszList, int* pnCount) {
 	FILE* pFile = NULL;
 	*pnCount = 0;
 	*pppszList = (WCHAR**)malloc(0);
-	errno_t error = _wfopen_s(&pFile, pszPath, L"rt, ccs=UTF-8");
-	if (pFile && !error) {
-		static WCHAR szBuffer[MAX_PATH + 1];
-		while (fgetws(szBuffer, MAX_PATH, pFile)) {
-			WCHAR* pszNewLine = wcsrchr(szBuffer, '\n');
-			if (pszNewLine)
-				*pszNewLine = '\0';
-			int len = wcslen(szBuffer);
-			++* pnCount;
-			*pppszList = (WCHAR**)realloc(*pppszList, sizeof(WCHAR*) * (*pnCount));
-			++len;
-			WCHAR *pszNewString= (WCHAR*)malloc(sizeof(WCHAR) * len);
-			wcscpy_s(pszNewString,len, szBuffer);
-			(*pppszList)[(*pnCount) - 1] = pszNewString;
+	if (*pppszList) {
+		errno_t error = _wfopen_s(&pFile, pszPath, L"rt, ccs=UTF-8");
+		if (pFile && !error) {
+			static WCHAR szBuffer[MAX_PATH + 1];
+			while (fgetws(szBuffer, MAX_PATH, pFile)) {
+				WCHAR* pszNewLine = wcsrchr(szBuffer, '\n');
+				if (pszNewLine)
+					*pszNewLine = '\0';
+				int len = wcslen(szBuffer);
+				++* pnCount;
+				*pppszList = (WCHAR**)realloc(*pppszList, sizeof(WCHAR*) * (*pnCount));
+				if (*pppszList) {
+					++len;
+					WCHAR* pszNewString = (WCHAR*)malloc(sizeof(WCHAR) * len);
+					if (pszNewString) {
+						wcscpy_s(pszNewString, len, szBuffer);
+						(*pppszList)[(*pnCount) - 1] = pszNewString;
+					}
+				}
+			}
+			fclose(pFile);
 		}
-		fclose(pFile);
 	}
 }
 
