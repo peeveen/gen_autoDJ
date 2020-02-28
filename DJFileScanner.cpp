@@ -30,7 +30,7 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
   }
 }
 
-void GetStartStopPositions(short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, StartStopPositions* pSSPos) {
+void GetStartStopPositions(short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit, StartStopPositions* pSSPos) {
   for (DWORD f = 0; f < cbSize; f += channels) {
     double total = 0;
     for (int g = 0; g < channels; ++g) {
@@ -38,24 +38,27 @@ void GetStartStopPositions(short* pWavData, int channels, UINT64 bytesPerSecond,
     }
     total /= channels;
     if (total > startThreshold) {
-      pSSPos->startPos = (DWORD)(((f * channels) / (double)bytesPerSecond) * 1000.0);
+      pSSPos->startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
       break;
     }
   }
-  for (DWORD f = cbSize - channels; f > 0; f -= channels) {
+  DWORD songEnd=(DWORD)(((((double)cbSize- channels) * channels) / (double)bytesPerSecond) * 1000.0);
+  DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
+  pSSPos->stopPos = stopLimit>songEnd?songEnd:stopLimit;
+  for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
     double total = 0;
     for (int g = 0; g < channels; ++g) {
       total += abs(pWavData[f + g]);
     }
     total /= channels;
     if (total > stopThreshold) {
-      pSSPos->stopPos = (DWORD)(((f * channels) / (double)bytesPerSecond) * 1000.0);
+      pSSPos->stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
       break;
     }
   }
 }
 
-bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, StartStopPositions* pSSPos) {
+bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopLimit, StartStopPositions* pSSPos) {
   bool result = false;
   IMFSourceReader* pReader = NULL;
   HRESULT hr = ::MFCreateSourceReaderFromURL(pszFilename, NULL, &pReader);
@@ -96,31 +99,33 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, StartStopPo
                         IMFSample* pSample = NULL;
                         DWORD cbWavData(0);
                         BYTE* pData = (BYTE*)malloc((size_t)cbAudioClipSize);
-                        for (;;) {
-                          hr = pReader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, NULL, &dwFlags, NULL, &pSample);
-                          if (FAILED(hr) || (dwFlags & MF_SOURCE_READERF_ENDOFSTREAM))
-                            break;
-                          IMFMediaBuffer* pBuffer = NULL;
-                          hr = pSample->ConvertToContiguousBuffer(&pBuffer);
-                          if (SUCCEEDED(hr)) {
-                            DWORD cbBuffer = 0;
-                            BYTE* pAudioData = NULL;
-                            hr = pBuffer->Lock(&pAudioData, NULL, &cbBuffer);
+                        if (pData) {
+                          for (;;) {
+                            hr = pReader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, NULL, &dwFlags, NULL, &pSample);
+                            if (FAILED(hr) || (dwFlags & MF_SOURCE_READERF_ENDOFSTREAM))
+                              break;
+                            IMFMediaBuffer* pBuffer = NULL;
+                            hr = pSample->ConvertToContiguousBuffer(&pBuffer);
                             if (SUCCEEDED(hr)) {
-                              memcpy(pData + cbWavData, pAudioData, cbBuffer);
-                              cbWavData += cbBuffer;
-                              pBuffer->Unlock();
+                              DWORD cbBuffer = 0;
+                              BYTE* pAudioData = NULL;
+                              hr = pBuffer->Lock(&pAudioData, NULL, &cbBuffer);
+                              if (SUCCEEDED(hr)) {
+                                memcpy(pData + cbWavData, pAudioData, cbBuffer);
+                                cbWavData += cbBuffer;
+                                pBuffer->Unlock();
+                              }
+                              pBuffer->Release();
                             }
-                            pBuffer->Release();
+                            pSample->Release();
                           }
-                          pSample->Release();
+                          short* pWavData = (short*)pData;
+                          cbWavData /= sizeof(short);
+                          Normalize(pWavData, channels, cbWavData);
+                          GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, stopLimit, pSSPos);
+                          result = true;
+                          free(pWavData);
                         }
-                        short* pWavData = (short*)pData;
-                        cbWavData /= sizeof(short);
-                        Normalize(pWavData, channels, cbWavData);
-                        GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke?g_nKaraokeStopThreshold:g_nStopThreshold,pSSPos);
-                        result = true;
-                        free(pWavData);
                       }
                     }
                     pUncompressedAudioType->Release();

@@ -42,3 +42,12 @@ typedef struct StartStopPositions {
 	DWORD startPos;
 	DWORD stopPos;
 } StartStopPositions;
+
+// The CDG data packet structure.
+typedef struct CDGPacket {
+	BYTE command;
+	BYTE instruction;
+	BYTE unused1[2];
+	BYTE data[16];
+	BYTE unused2[4];
+} CDGPacket;

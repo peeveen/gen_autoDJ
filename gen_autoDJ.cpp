@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <wchar.h>
 #include <malloc.h>
+#include <stdio.h>
 #include "DJDefs.h"
 #include "DJPrefs.h"
 #include "DJFileScanner.h"
@@ -44,16 +45,40 @@ void CheckForInterruption() {
 	// started something manually. We need to calculate a new stop time.
 	if (fileBeingPlayed && _wcsicmp(g_pszNowPlayingPath, fileBeingPlayed)) {
 		bool isKaraoke = false;
-		WCHAR szCDGTest[MAX_PATH + 1];
+		WCHAR szCDGTest[MAX_PATH + 1] = { '0' };
 		wcscpy_s(szCDGTest, fileBeingPlayed);
 		WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
+		ULONG karaokeLimit = 0;
 		if (pszLastDot) {
 			wcscpy_s(pszLastDot, (MAX_PATH -(pszLastDot-szCDGTest)),L".cdg");
 			struct _stat64i32 stat;
-			if (!_wstat(szCDGTest, &stat))
-				isKaraoke = true;
+			if (!_wstat(szCDGTest, &stat)) {
+				int instructions=stat.st_size / sizeof(CDGPacket);
+				int fileSize = instructions * sizeof(CDGPacket);
+				CDGPacket* pCDGFileContents = (CDGPacket*)malloc(fileSize);
+				if (pCDGFileContents) {
+					FILE* pCDGFile;
+					errno_t error = _wfopen_s(&pCDGFile, szCDGTest, L"rb");
+					if (!error && pCDGFile) {
+						int read = fread(pCDGFileContents,sizeof(CDGPacket), instructions, pCDGFile);
+						if (read== instructions) {
+							for (int f = instructions - 1; f >= 0; --f) {
+								BYTE cmd = pCDGFileContents[f].command & 0x3F;
+								BYTE instr = pCDGFileContents[f].instruction & 0x3F;
+								// CDG_INSTR_TILE_BLOCK_XOR
+								if (cmd==0x09 && instr == 38) {
+									karaokeLimit = (ULONG)((f / 300.0) * 1000.0);
+									break;
+								}
+							}
+						}
+						fclose(pCDGFile);
+					}
+					free(pCDGFileContents);
+				}
+			}
 		}
-		GetStartStopPositions(fileBeingPlayed, isKaraoke, &g_startStopPositions);
+		GetStartStopPositions(fileBeingPlayed, isKaraoke, karaokeLimit+2000, &g_startStopPositions);
 	}
 }
 
@@ -61,7 +86,7 @@ void PlayNextTrack() {
 	WCHAR* pszTrackPath = GetNextTrack();
 	if (pszTrackPath) {
 		wcscpy_s(g_pszNowPlayingPath, pszTrackPath);
-		GetStartStopPositions(pszTrackPath, false,&g_startStopPositions);
+		GetStartStopPositions(pszTrackPath, false,0,&g_startStopPositions);
 		enqueueFileWithMetaStructW w;
 		w.filename = pszTrackPath;
 		w.length = 100;
