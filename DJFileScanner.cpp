@@ -91,9 +91,16 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopL
                         UINT32 sampleSize = ::MFGetAttributeUINT32(pUncompressedAudioType, MF_MT_SAMPLE_SIZE, 0);
                         UINT64 cbBytesPerSecond = ::MFGetAttributeUINT32(pUncompressedAudioType, MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 0);
                         UINT64 songLength = prop.uhVal.QuadPart;
-                        UINT64 cbAudioClipSize = (UINT64)(cbBytesPerSecond * (songLength / 10000000.0));
+                        double songLengthSeconds = (songLength / 10000000.0);
+                        // Allocate an extra second just to be on the safe side. Sometimes it overspills.
+                        UINT64 cbAudioClipSize = (UINT64)(cbBytesPerSecond * (songLengthSeconds+1));
                         cbAudioClipSize = min(cbAudioClipSize, MAXDWORD);
                         cbAudioClipSize = ((cbAudioClipSize / cbBlockSize) + channels) * cbBlockSize;
+
+//                        WCHAR sz[100];
+//                        int nSeconds = (int)songLengthSeconds;
+//                        wsprintf(sz, L"sampleSize=%d\nchannels=%d\nsongLength=%d\nbytesPerSecond=%d\nbufferSize=%d",sampleSize,channels,nSeconds, (long)cbBytesPerSecond,(long)cbAudioClipSize);
+//                        ::MessageBox(NULL, sz, L"", MB_OK);
 
                         DWORD dwFlags(0);
                         IMFSample* pSample = NULL;
@@ -111,8 +118,12 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopL
                               BYTE* pAudioData = NULL;
                               hr = pBuffer->Lock(&pAudioData, NULL, &cbBuffer);
                               if (SUCCEEDED(hr)) {
-                                memcpy(pData + cbWavData, pAudioData, cbBuffer);
-                                cbWavData += cbBuffer;
+                                long remainingSpace = (long)cbAudioClipSize - cbWavData;
+                                if (remainingSpace > 0) {
+                                  long amountToCopy = min(remainingSpace, (long)cbBuffer);
+                                  memcpy(pData + cbWavData, pAudioData, amountToCopy);
+                                  cbWavData += amountToCopy;
+                                }
                                 pBuffer->Unlock();
                               }
                               pBuffer->Release();
@@ -121,6 +132,7 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopL
                           }
                           short* pWavData = (short*)pData;
                           cbWavData /= sizeof(short);
+
                           Normalize(pWavData, channels, cbWavData);
                           GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, stopLimit, pSSPos);
                           result = true;
