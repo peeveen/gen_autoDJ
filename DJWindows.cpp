@@ -23,8 +23,8 @@ void GetTimeString(WCHAR* szBuffer, int size, DWORD time) {
 	else {
 		int seconds = time / 1000;
 		int mins = seconds / 60;
-		seconds -= (mins * 60);
 		int tenths = (time - (seconds * 1000)) / 100;
+		seconds -= (mins * 60);
 		wsprintf(szBuffer, L"%02d:%02d.%d", mins,seconds, tenths);
 	}
 }
