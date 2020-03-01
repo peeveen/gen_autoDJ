@@ -29,10 +29,24 @@ void GetTimeString(WCHAR* szBuffer, int size, DWORD time) {
 	}
 }
 
-const WCHAR *GetFilename(const WCHAR* pszPath) {
+const WCHAR *GetFilename(const WCHAR* pszPath,int *pnChars) {
 	const WCHAR *pszFilename=wcsrchr(pszPath, '\\');
-	if (pszFilename)
+	*pnChars = -1;
+	if (pszFilename) {
 		++pszFilename;
+		*pnChars = wcslen(pszFilename);
+		WCHAR sz[MAX_PATH + 1];
+		wcscpy_s(sz, pszFilename);
+		_wcslwr_s(sz);
+		WCHAR* ext = wcsstr(sz, L".m4a");
+		if (ext)
+			*pnChars = ext - sz;
+		else {
+			ext = wcsstr(sz, L".mp3");
+			if (ext)
+				*pnChars = ext - sz;
+		}
+	}
 	else
 		pszFilename = L"<nothing>";
 	return pszFilename;
@@ -52,8 +66,9 @@ void DrawInfo() {
 	textRect.top += spacing;
 	textRect.bottom += spacing;
 	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 255));
-	const WCHAR* filename = GetFilename(g_pszCurrentTrackPath);
-	::DrawText(g_hDJWindowDC,  filename, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
+	int nChars = -1;
+	const WCHAR* filename = GetFilename(g_pszCurrentTrackPath,&nChars);
+	::DrawText(g_hDJWindowDC,  filename, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
 	static WCHAR szTime[100];
 	GetTimeString(szTime, 99, g_currentTrackStartStopPositions.startPos);
 	textRect.top += spacing;
@@ -82,8 +97,8 @@ void DrawInfo() {
 	textRect.top += spacing;
 	textRect.bottom += spacing;
 	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 255));
-	filename = GetFilename(g_pszNextTrackPath);
-	::DrawText(g_hDJWindowDC, filename, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
+	filename = GetFilename(g_pszNextTrackPath,&nChars);
+	::DrawText(g_hDJWindowDC, filename, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
 	GetTimeString(szTime, 99, g_nextTrackStartStopPositions.startPos);
 	textRect.top += spacing;
 	textRect.bottom += spacing;
