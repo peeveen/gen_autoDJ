@@ -167,18 +167,23 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="DJData.h" />
     <ClInclude Include="DJDefs.h" />
     <ClInclude Include="DJFileScanner.h" />
     <ClInclude Include="DJGlobals.h" />
     <ClInclude Include="DJPrefs.h" />
     <ClInclude Include="DJTrackLists.h" />
+    <ClInclude Include="DJWindows.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DJData.cpp" />
     <ClCompile Include="DJFileScanner.cpp" />
     <ClCompile Include="DJPrefs.cpp" />
     <ClCompile Include="DJTrackLists.cpp" />
+    <ClCompile Include="DJWindows.cpp" />
     <ClCompile Include="gen_autoDJ.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -189,6 +194,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="gen_autoDJ.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="winampIcon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="gen_autoDJ.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

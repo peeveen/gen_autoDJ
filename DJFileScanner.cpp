@@ -1,12 +1,16 @@
 #include "pch.h"
 #include <combaseapi.h>
 #include <mfapi.h>
+#include <sys/types.h>
 #include <math.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
+#include <stdio.h>
 #include <mferror.h>
+#include <wchar.h>
 #include "DJDefs.h"
 #include "DJPrefs.h"
+#include "DJWindows.h"
 
 void Normalize(short* pWavData, int channels, DWORD cbSize) {
   int max = 0, min = 0;
@@ -30,38 +34,85 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
   }
 }
 
-void GetStartStopPositions(short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit, StartStopPositions* pSSPos) {
-  for (DWORD f = 0; f < cbSize; f += channels) {
-    double total = 0;
-    for (int g = 0; g < channels; ++g) {
-      total += abs(pWavData[f + g]);
+void GetStartStopPositions(bool start,bool stop,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit, StartStopPositions* pSSPos) {
+  if(start)
+    for (DWORD f = 0; f < cbSize; f += channels) {
+      double total = 0;
+      for (int g = 0; g < channels; ++g) {
+        total += abs(pWavData[f + g]);
+      }
+      total /= channels;
+      if (total > startThreshold) {
+        pSSPos->startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+        break;
+      }
     }
-    total /= channels;
-    if (total > startThreshold) {
-      pSSPos->startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
-      break;
-    }
-  }
-  DWORD songEnd=(DWORD)(((((double)cbSize- channels) * channels) / (double)bytesPerSecond) * 1000.0);
-  DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
-  pSSPos->stopPos = stopLimit>songEnd?songEnd:stopLimit;
-  for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
-    double total = 0;
-    for (int g = 0; g < channels; ++g) {
-      total += abs(pWavData[f + g]);
-    }
-    total /= channels;
-    if (total > stopThreshold) {
-      pSSPos->stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
-      break;
+  if (stop) {
+    DWORD songEnd = (DWORD)(((((double)cbSize - channels) * channels) / (double)bytesPerSecond) * 1000.0);
+    DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
+    pSSPos->stopPos = stopLimit > songEnd ? songEnd : stopLimit;
+    for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
+      double total = 0;
+      for (int g = 0; g < channels; ++g) {
+        total += abs(pWavData[f + g]);
+      }
+      total /= channels;
+      if (total > stopThreshold) {
+        pSSPos->stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+        break;
+      }
     }
   }
 }
 
-bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopLimit, StartStopPositions* pSSPos) {
-  bool result = false;
+struct GetStartStopPositionsParams {
+  WCHAR szFilename[MAX_PATH+1];
+  StartStopPositions* pSSPos;
+  bool start;
+  bool stop;
+};
+
+DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
+  GetStartStopPositionsParams *pParams= (GetStartStopPositionsParams*)pParam;
+  DWORD result = 0;
   IMFSourceReader* pReader = NULL;
-  HRESULT hr = ::MFCreateSourceReaderFromURL(pszFilename, NULL, &pReader);
+
+  bool isKaraoke = false;
+  WCHAR szCDGTest[MAX_PATH + 1] = { '0' };
+  wcscpy_s(szCDGTest, pParams->szFilename);
+  WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
+  ULONG karaokeLimit = 0;
+  if (pszLastDot) {
+    wcscpy_s(pszLastDot, (MAX_PATH - (pszLastDot - szCDGTest)), L".cdg");
+    struct _stat64i32 stat;
+    if (!_wstat(szCDGTest, &stat)) {
+      int instructions = stat.st_size / sizeof(CDGPacket);
+      int fileSize = instructions * sizeof(CDGPacket);
+      CDGPacket* pCDGFileContents = (CDGPacket*)malloc(fileSize);
+      if (pCDGFileContents) {
+        FILE* pCDGFile;
+        errno_t error = _wfopen_s(&pCDGFile, szCDGTest, L"rb");
+        if (!error && pCDGFile) {
+          int read = fread(pCDGFileContents, sizeof(CDGPacket), instructions, pCDGFile);
+          if (read == instructions) {
+            for (int f = instructions - 1; f >= 0; --f) {
+              BYTE cmd = pCDGFileContents[f].command & 0x3F;
+              BYTE instr = pCDGFileContents[f].instruction & 0x3F;
+              // CDG_INSTR_TILE_BLOCK_XOR
+              if (cmd == 0x09 && instr == 38) {
+                karaokeLimit = (ULONG)((f / 300.0) * 1000.0);
+                break;
+              }
+            }
+          }
+          fclose(pCDGFile);
+        }
+        free(pCDGFileContents);
+      }
+    }
+  }
+
+  HRESULT hr = ::MFCreateSourceReaderFromURL(pParams->szFilename, NULL, &pReader);
   if (SUCCEEDED(hr)) {
     hr = pReader->SetStreamSelection((DWORD)MF_SOURCE_READER_ALL_STREAMS, FALSE);
     if (SUCCEEDED(hr)) {
@@ -134,8 +185,9 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopL
                           cbWavData /= sizeof(short);
 
                           Normalize(pWavData, channels, cbWavData);
-                          GetStartStopPositions(pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, stopLimit, pSSPos);
-                          result = true;
+                          GetStartStopPositions(pParams->start,pParams->stop,pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, karaokeLimit, pParams->pSSPos);
+                          ::InvalidateRect(g_hDJWindow, NULL, FALSE);
+                          result = 1;
                           free(pWavData);
                         }
                       }
@@ -152,5 +204,17 @@ bool GetStartStopPositions(const WCHAR *pszFilename, bool isKaraoke, ULONG stopL
     }
     pReader->Release();
   }
+  free(pParam);
   return result;
+}
+
+void GetStartStopPositions(bool start,bool stop,const WCHAR* pszFilename, StartStopPositions* pSSPos) {
+  GetStartStopPositionsParams* pParams = (GetStartStopPositionsParams *)malloc(sizeof(GetStartStopPositionsParams));
+  if (pParams) {
+    pParams->start = start;
+    pParams->stop = stop;
+    wcscpy_s(pParams->szFilename, pszFilename);
+    pParams->pSSPos = pSSPos;
+    ::CreateThread(NULL, 0, GetStartStopPositionsThread, pParams, 0, NULL);
+  }
 }

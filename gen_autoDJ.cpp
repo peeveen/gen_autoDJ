@@ -3,14 +3,14 @@
 #include <combaseapi.h>
 #include <mfapi.h>
 #include <shellapi.h>
-#include <sys/types.h>
 #include <wchar.h>
 #include <malloc.h>
-#include <stdio.h>
 #include "DJDefs.h"
 #include "DJPrefs.h"
 #include "DJFileScanner.h"
 #include "DJTrackLists.h"
+#include "DJWindows.h"
+#include "DJData.h"
 
 int init(void);
 void config(void);
@@ -32,80 +32,61 @@ extern "C" __declspec(dllexport) winampGeneralPurposePlugin * winampGetGeneralPu
 	return &plugin;
 }
 
-// Path to the file that the Auto DJ is now playing.
-WCHAR g_pszNowPlayingPath[MAX_PATH + 1] = { '\0' };
-StartStopPositions g_startStopPositions = { 0,0 };
 HANDLE g_hTimeWatcherThread = NULL;
 HANDLE g_hStopTimeWatcherEvent = NULL;
 
-void CheckForInterruption() {
-	LRESULT listPos = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
-	const WCHAR* fileBeingPlayed = (const WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
-	// If it's a different file from what we're expecting it to be, then the real DJ has
-	// started something manually. We need to calculate a new stop time.
-	if (fileBeingPlayed && _wcsicmp(g_pszNowPlayingPath, fileBeingPlayed)) {
-		bool isKaraoke = false;
-		WCHAR szCDGTest[MAX_PATH + 1] = { '0' };
-		wcscpy_s(szCDGTest, fileBeingPlayed);
-		WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
-		ULONG karaokeLimit = 0;
-		if (pszLastDot) {
-			wcscpy_s(pszLastDot, (MAX_PATH -(pszLastDot-szCDGTest)),L".cdg");
-			struct _stat64i32 stat;
-			if (!_wstat(szCDGTest, &stat)) {
-				int instructions=stat.st_size / sizeof(CDGPacket);
-				int fileSize = instructions * sizeof(CDGPacket);
-				CDGPacket* pCDGFileContents = (CDGPacket*)malloc(fileSize);
-				if (pCDGFileContents) {
-					FILE* pCDGFile;
-					errno_t error = _wfopen_s(&pCDGFile, szCDGTest, L"rb");
-					if (!error && pCDGFile) {
-						int read = fread(pCDGFileContents,sizeof(CDGPacket), instructions, pCDGFile);
-						if (read== instructions) {
-							for (int f = instructions - 1; f >= 0; --f) {
-								BYTE cmd = pCDGFileContents[f].command & 0x3F;
-								BYTE instr = pCDGFileContents[f].instruction & 0x3F;
-								// CDG_INSTR_TILE_BLOCK_XOR
-								if (cmd==0x09 && instr == 38) {
-									karaokeLimit = (ULONG)((f / 300.0) * 1000.0);
-									break;
-								}
-							}
-						}
-						fclose(pCDGFile);
-					}
-					free(pCDGFileContents);
-				}
-			}
-		}
-		GetStartStopPositions(fileBeingPlayed, isKaraoke, karaokeLimit+2000, &g_startStopPositions);
+void HandleInterruption(const WCHAR *pszFileBeingPlayed) {
+	g_currentTrackStartStopPositions = { MAXUINT32,MAXUINT32 };
+	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, pszFileBeingPlayed);
+	GetStartStopPositions(false,true,pszFileBeingPlayed, &g_currentTrackStartStopPositions);
+	::InvalidateRect(g_hDJWindow, NULL, FALSE);
+}
+
+void FindAndProcessNextTrack() {
+	WCHAR* pszTrackPath = GetNextTrack();
+	if (pszTrackPath) {
+		wcscpy_s(g_pszNextTrackPath, MAX_PATH, pszTrackPath);
+		GetStartStopPositions(true,true,g_pszNextTrackPath, &g_nextTrackStartStopPositions);
+		free(pszTrackPath);
 	}
 }
 
 void PlayNextTrack() {
-	WCHAR* pszTrackPath = GetNextTrack();
-	if (pszTrackPath) {
-		wcscpy_s(g_pszNowPlayingPath, pszTrackPath);
-		GetStartStopPositions(pszTrackPath, false,0,&g_startStopPositions);
-		enqueueFileWithMetaStructW w;
-		w.filename = pszTrackPath;
-		w.length = 100;
-		w.title = pszTrackPath;
-		::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
-		::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
-		::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
-		::SendMessage(g_hWinampWindow, WM_WA_IPC, g_startStopPositions.startPos, IPC_JUMPTOTIME);
-		free(pszTrackPath);
+	enqueueFileWithMetaStructW w;
+	w.filename = g_pszNextTrackPath;
+	w.length = 100;
+	w.title = g_pszNextTrackPath;
+	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, g_pszNextTrackPath);
+	g_currentTrackStartStopPositions = g_nextTrackStartStopPositions;
+	g_nextTrackStartStopPositions = { MAXUINT32-1,MAXUINT32-1 };
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, g_currentTrackStartStopPositions.startPos, IPC_JUMPTOTIME);
+	FindAndProcessNextTrack();
+	::InvalidateRect(g_hDJWindow, NULL, FALSE);
+}
+
+void OnTrackStarted() {
+	LRESULT listPos = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
+	const WCHAR* pszFileBeingPlayed = (const WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
+	// If it's a different file from what we're expecting it to be, then the real DJ has
+	// started something manually. We need to calculate a new stop time.
+	if (pszFileBeingPlayed) {
+		if (_wcsicmp(g_pszCurrentTrackPath, pszFileBeingPlayed))
+			HandleInterruption(pszFileBeingPlayed);
+		if(g_nextTrackStartStopPositions.stopPos==MAXUINT32)
+			FindAndProcessNextTrack();
 	}
 }
 
 DWORD WINAPI TimeWatcher(LPVOID pParam) {
 	while (::WaitForSingleObject(g_hStopTimeWatcherEvent, 250) == WAIT_TIMEOUT) {
-		if (g_startStopPositions.stopPos) {
+		if (g_currentTrackStartStopPositions.stopPos <MAXUINT32-1) {
 			DWORD time = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETOUTPUTTIME);
 			if (time) {
 				time = (DWORD)(time * g_nTimeScaler);
-				if (time > g_startStopPositions.stopPos)
+				if (time > g_currentTrackStartStopPositions.stopPos)
 					PlayNextTrack();
 			}
 		}
@@ -133,7 +114,7 @@ LRESULT CALLBACK AutoDJWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 			// This message indicates that a new file has started playing. It might be the one
 			// we asked for, or it might be one that the "real" DJ has started manually. We need
 			// to check.
-			CheckForInterruption();
+			OnTrackStarted();
 			break;
 		}
 		case IPC_CB_MISC:
@@ -167,6 +148,8 @@ int init() {
 		}
 	}
 
+	CreateWindows();
+
 	return 0;
 }
 
@@ -179,5 +162,7 @@ void quit() {
 	FreeTrackList();
 	::SetWindowLong(plugin.hwndParent, GWL_WNDPROC, (LONG)g_pOriginalWndProc);
 	::MFShutdown();
+
+	DestroyWindows();
 	::CoUninitialize();
 }

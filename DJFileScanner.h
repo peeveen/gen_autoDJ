@@ -1,4 +1,4 @@
 #pragma once
 #include "pch.h"
 
-extern bool GetStartStopPositions(const WCHAR* pszFilename, bool isKaraoke, ULONG stopLimit, StartStopPositions* pSSPos);
+extern void GetStartStopPositions(bool start,bool stop,const WCHAR* pszFilename, StartStopPositions* pSSPos);
