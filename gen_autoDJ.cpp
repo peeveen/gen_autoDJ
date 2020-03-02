@@ -62,21 +62,21 @@ void PlayNextTrack() {
 	w.length = 100;
 	w.title = sz;
 
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, posses.startPos, IPC_JUMPTOTIME);
-
 	::WaitForSingleObject(g_hCurrentTrackMutex, INFINITE);
 	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, sz);
 	g_currentTrackStartStopPositions = posses;
 	::ReleaseMutex(g_hCurrentTrackMutex);
 
 	::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
-	g_nextTrackStartStopPositions = { MAXUINT32 - 1,MAXUINT32 - 1 };
+	g_pszNextTrackPath[0] = '\0';
+	g_nextTrackStartStopPositions = { MAXUINT32,MAXUINT32 };
 	::ReleaseMutex(g_hNextTrackMutex);
 
-	FindAndProcessNextTrack();
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, posses.startPos, IPC_JUMPTOTIME);
+
 	::InvalidateRect(g_hDJWindow, NULL, FALSE);
 }
 
@@ -108,7 +108,7 @@ bool ShouldPlayNextTrack() {
 	DWORD stopPos = g_currentTrackStartStopPositions.stopPos;
 	::ReleaseMutex(g_hCurrentTrackMutex);
 
-	if (stopPos < MAXUINT32 - 1) {
+	if (stopPos != MAXUINT32) {
 		DWORD time = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETOUTPUTTIME);
 		if (time) {
 			time = (DWORD)(time * g_nTimeScaler);
