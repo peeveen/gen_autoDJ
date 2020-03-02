@@ -34,7 +34,8 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
   }
 }
 
-void GetStartStopPositions(bool start,bool stop,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit, StartStopPositions* pSSPos) {
+StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit) {
+  DWORD startPos = MAXUINT32, stopPos = MAXUINT32;
   if(start)
     for (DWORD f = 0; f < cbSize; f += channels) {
       double total = 0;
@@ -43,33 +44,33 @@ void GetStartStopPositions(bool start,bool stop,short* pWavData, int channels, U
       }
       total /= channels;
       if (total > startThreshold) {
-        pSSPos->startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+        startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
         break;
       }
     }
-  if (stop) {
-    DWORD songEnd = (DWORD)(((((double)cbSize - channels) * channels) / (double)bytesPerSecond) * 1000.0);
-    DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
-    pSSPos->stopPos = stopLimit > songEnd ? songEnd : stopLimit;
-    for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
-      double total = 0;
-      for (int g = 0; g < channels; ++g) {
-        total += abs(pWavData[f + g]);
-      }
-      total /= channels;
-      if (total > stopThreshold) {
-        pSSPos->stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
-        break;
-      }
+  DWORD songEnd = (DWORD)(((((double)cbSize - channels) * channels) / (double)bytesPerSecond) * 1000.0);
+  DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
+  stopPos = stopLimit > songEnd ? songEnd : stopLimit;
+  for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
+    double total = 0;
+    for (int g = 0; g < channels; ++g) {
+      total += abs(pWavData[f + g]);
+    }
+    total /= channels;
+    if (total > stopThreshold) {
+      stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+      break;
     }
   }
+  return { startPos,stopPos };
 }
 
 struct GetStartStopPositionsParams {
   WCHAR szFilename[MAX_PATH+1];
+  WCHAR* pszFilenameTarget;
   StartStopPositions* pSSPos;
-  bool start;
-  bool stop;
+  HANDLE hDataMutex;
+  bool isNextTrack;
 };
 
 DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
@@ -185,7 +186,11 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                           cbWavData /= sizeof(short);
 
                           Normalize(pWavData, channels, cbWavData);
-                          GetStartStopPositions(pParams->start,pParams->stop,pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, karaokeLimit, pParams->pSSPos);
+                          ::WaitForSingleObject(pParams->hDataMutex,INFINITE);
+                          StartStopPositions posses=GetStartStopPositions(pParams->isNextTrack,pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, karaokeLimit);
+                          (*pParams->pSSPos) = posses;
+                          ::ReleaseMutex(pParams->hDataMutex);
+                          wcscpy_s(pParams->pszFilenameTarget,MAX_PATH, pParams->szFilename);
                           ::InvalidateRect(g_hDJWindow, NULL, FALSE);
                           result = 1;
                           free(pWavData);
@@ -208,12 +213,15 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
   return result;
 }
 
-void GetStartStopPositions(bool start,bool stop,const WCHAR* pszFilename, StartStopPositions* pSSPos) {
+void GetStartStopPositions(bool isNextTrack,WCHAR* pszFilename, WCHAR *pszFilenameTarget,StartStopPositions* pSSPos,HANDLE hDataMutex) {
   GetStartStopPositionsParams* pParams = (GetStartStopPositionsParams *)malloc(sizeof(GetStartStopPositionsParams));
   if (pParams) {
-    pParams->start = start;
-    pParams->stop = stop;
+    pParams->isNextTrack = isNextTrack;
+    pParams->hDataMutex = hDataMutex;
+    pParams->pszFilenameTarget = pszFilenameTarget;
     wcscpy_s(pParams->szFilename, pszFilename);
+    if (isNextTrack)
+      free(pszFilename);
     pParams->pSSPos = pSSPos;
     ::CreateThread(NULL, 0, GetStartStopPositionsThread, pParams, 0, NULL);
   }

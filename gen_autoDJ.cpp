@@ -34,62 +34,107 @@ extern "C" __declspec(dllexport) winampGeneralPurposePlugin * winampGetGeneralPu
 
 HANDLE g_hTimeWatcherThread = NULL;
 HANDLE g_hStopTimeWatcherEvent = NULL;
+HANDLE g_hCurrentTrackMutex = NULL;
+HANDLE g_hNextTrackMutex = NULL;
+bool g_bNextTrackIsRequest;
+__time64_t g_requestFileLastModifiedTime = 0;
 
-void HandleInterruption(const WCHAR *pszFileBeingPlayed) {
+void HandleInterruption(WCHAR *pszFileBeingPlayed) {
 	g_currentTrackStartStopPositions = { MAXUINT32,MAXUINT32 };
-	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, pszFileBeingPlayed);
-	GetStartStopPositions(false,true,pszFileBeingPlayed, &g_currentTrackStartStopPositions);
-	::InvalidateRect(g_hDJWindow, NULL, FALSE);
+	GetStartStopPositions(false,pszFileBeingPlayed, g_pszCurrentTrackPath,&g_currentTrackStartStopPositions,g_hCurrentTrackMutex);
 }
 
 void FindAndProcessNextTrack() {
-	WCHAR* pszTrackPath = GetNextTrack();
-	if (pszTrackPath) {
-		wcscpy_s(g_pszNextTrackPath, MAX_PATH, pszTrackPath);
-		GetStartStopPositions(true,true,g_pszNextTrackPath, &g_nextTrackStartStopPositions);
-		free(pszTrackPath);
-	}
+	WCHAR* pszTrackPath = GetNextTrack(&g_bNextTrackIsRequest);
+	if (pszTrackPath)
+		GetStartStopPositions(true, pszTrackPath, g_pszNextTrackPath,&g_nextTrackStartStopPositions,g_hNextTrackMutex);
 }
 
 void PlayNextTrack() {
+	::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
+	WCHAR sz[MAX_PATH + 1] = { '\0' };
+	wcscpy_s(sz, g_pszNextTrackPath);
+	StartStopPositions posses = g_nextTrackStartStopPositions;
+	::ReleaseMutex(g_hNextTrackMutex);
+
 	enqueueFileWithMetaStructW w;
-	w.filename = g_pszNextTrackPath;
+	w.filename = sz;
 	w.length = 100;
-	w.title = g_pszNextTrackPath;
-	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, g_pszNextTrackPath);
-	g_currentTrackStartStopPositions = g_nextTrackStartStopPositions;
-	g_nextTrackStartStopPositions = { MAXUINT32-1,MAXUINT32-1 };
+	w.title = sz;
+
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_STARTPLAY);
-	::SendMessage(g_hWinampWindow, WM_WA_IPC, g_currentTrackStartStopPositions.startPos, IPC_JUMPTOTIME);
+	::SendMessage(g_hWinampWindow, WM_WA_IPC, posses.startPos, IPC_JUMPTOTIME);
+
+	::WaitForSingleObject(g_hCurrentTrackMutex, INFINITE);
+	wcscpy_s(g_pszCurrentTrackPath, MAX_PATH, sz);
+	g_currentTrackStartStopPositions = posses;
+	::ReleaseMutex(g_hCurrentTrackMutex);
+
+	::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
+	g_nextTrackStartStopPositions = { MAXUINT32 - 1,MAXUINT32 - 1 };
+	::ReleaseMutex(g_hNextTrackMutex);
+
 	FindAndProcessNextTrack();
 	::InvalidateRect(g_hDJWindow, NULL, FALSE);
 }
 
 void OnTrackStarted() {
 	LRESULT listPos = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
-	const WCHAR* pszFileBeingPlayed = (const WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
+	WCHAR* pszFileBeingPlayed = (WCHAR*)::SendMessage(g_hWinampWindow, WM_WA_IPC, listPos, IPC_GETPLAYLISTFILEW);
 	// If it's a different file from what we're expecting it to be, then the real DJ has
 	// started something manually. We need to calculate a new stop time.
 	if (pszFileBeingPlayed) {
-		if (_wcsicmp(g_pszCurrentTrackPath, pszFileBeingPlayed))
+		WCHAR sz[MAX_PATH + 1]={'\0'};
+		::WaitForSingleObject(g_hCurrentTrackMutex, INFINITE);
+		wcscpy_s(sz, g_pszCurrentTrackPath);
+		::ReleaseMutex(g_hCurrentTrackMutex);
+
+		if (_wcsicmp(sz, pszFileBeingPlayed))
 			HandleInterruption(pszFileBeingPlayed);
-		if(g_nextTrackStartStopPositions.stopPos==MAXUINT32)
+
+		::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
+		DWORD stopPos = g_nextTrackStartStopPositions.stopPos;
+		::ReleaseMutex(g_hNextTrackMutex);
+
+		if(stopPos==MAXUINT32)
 			FindAndProcessNextTrack();
 	}
 }
 
+bool ShouldPlayNextTrack() {
+	::WaitForSingleObject(g_hCurrentTrackMutex, INFINITE);
+	DWORD stopPos = g_currentTrackStartStopPositions.stopPos;
+	::ReleaseMutex(g_hCurrentTrackMutex);
+
+	if (stopPos < MAXUINT32 - 1) {
+		DWORD time = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETOUTPUTTIME);
+		if (time) {
+			time = (DWORD)(time * g_nTimeScaler);
+			return time > stopPos;
+		}
+	}
+	return false;
+}
+
+bool RequestFileHasBeenModified() {
+	struct _stat64i32 stat;
+	if (!_wstat(g_szRequestedTracksFilePath, &stat)) {
+		if (stat.st_mtime != g_requestFileLastModifiedTime) {
+			g_requestFileLastModifiedTime = stat.st_mtime;
+			return true;
+		}
+	}
+	return false;
+}
+
 DWORD WINAPI TimeWatcher(LPVOID pParam) {
 	while (::WaitForSingleObject(g_hStopTimeWatcherEvent, 250) == WAIT_TIMEOUT) {
-		if (g_currentTrackStartStopPositions.stopPos <MAXUINT32-1) {
-			DWORD time = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETOUTPUTTIME);
-			if (time) {
-				time = (DWORD)(time * g_nTimeScaler);
-				if (time > g_currentTrackStartStopPositions.stopPos)
-					PlayNextTrack();
-			}
-		}
+		if (RequestFileHasBeenModified() && !g_bNextTrackIsRequest)
+			FindAndProcessNextTrack();
+		if(ShouldPlayNextTrack())
+			PlayNextTrack();
 	}
 	return 0;
 }
@@ -138,17 +183,22 @@ int init() {
 	g_hWinampWindow = plugin.hwndParent;
 	g_pOriginalWndProc = (WNDPROC)::SetWindowLong(plugin.hwndParent, GWL_WNDPROC, (LONG)AutoDJWndProc);
 
-	HRESULT hr = ::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-	if (SUCCEEDED(hr)) {
-		hr = ::MFStartup(MF_VERSION);
-		if (SUCCEEDED(hr)) {
-			ReadPrefs();
-			ReadTrackList();
-			StartTimeWatcher();
+	g_hCurrentTrackMutex = ::CreateMutex(NULL, FALSE, NULL);
+	if (g_hCurrentTrackMutex) {
+		g_hNextTrackMutex = ::CreateMutex(NULL, FALSE, NULL);
+		if (g_hNextTrackMutex) {
+			HRESULT hr = ::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+			if (SUCCEEDED(hr)) {
+				hr = ::MFStartup(MF_VERSION);
+				if (SUCCEEDED(hr)) {
+					ReadPrefs();
+					ReadTrackList();
+					StartTimeWatcher();
+					CreateWindows();
+				}
+			}
 		}
 	}
-
-	CreateWindows();
 
 	return 0;
 }
@@ -165,4 +215,8 @@ void quit() {
 
 	DestroyWindows();
 	::CoUninitialize();
+	if (g_hCurrentTrackMutex)
+		::CloseHandle(g_hCurrentTrackMutex);
+	if (g_hNextTrackMutex)
+		::CloseHandle(g_hNextTrackMutex);
 }

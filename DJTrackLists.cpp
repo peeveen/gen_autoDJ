@@ -81,9 +81,10 @@ void FreeTrackList() {
 	free(g_ppszTrackPaths);
 }
 
-WCHAR* GetNextTrack() {
+WCHAR* GetNextTrack(bool *pbRequest) {
 	WCHAR* pszTrack = GetNextRequestedTrack();
 	if (!pszTrack) {
+		*pbRequest = false;
 		if (!g_nTracks) {
 			FreeTrackList();
 			ReadTrackList();
@@ -98,6 +99,8 @@ WCHAR* GetNextTrack() {
 			--g_nTracks;
 		}
 	}
+	else
+		*pbRequest = true;
 	return pszTrack;
 }
 

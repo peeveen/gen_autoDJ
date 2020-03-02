@@ -52,72 +52,54 @@ const WCHAR *GetFilename(const WCHAR* pszPath,int *pnChars) {
 	return pszFilename;
 }
 
+void TextOut(const WCHAR* pszText, int x, int y, COLORREF color, int nChars=-1) {
+	RECT rect;
+	::GetClientRect(g_hDJWindow, &rect);
+	RECT textRect = { x,y,rect.right,rect.bottom };
+	::SetTextColor(g_hDJWindowDC, color);
+	::DrawText(g_hDJWindowDC, pszText, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
+}
+
+void TimeOut(DWORD time, int x, int y, COLORREF color) {
+	static WCHAR szTime[100];
+	GetTimeString(szTime, 99, time);
+	TextOut(szTime, x, y, color);
+}
+
 void DrawInfo() {
-	const int spacing = 20;
-	const int timeIndent = 50;
+	COLORREF yellow = RGB(255, 255, 50);
+	COLORREF white = RGB(255, 255, 255);
+	COLORREF cyan = RGB(50, 255, 255);
+	COLORREF green = RGB(50, 255, 50);
+
 	RECT rect;
 	::GetClientRect(g_hDJWindow, &rect);
 	HBRUSH hBrush = (HBRUSH)::GetStockObject(BLACK_BRUSH);
 	int rectWidth = rect.right - rect.left;
 	::FillRect(g_hDJWindowDC, &rect, hBrush);
-	RECT textRect = { 10,10,rectWidth - 20,28 };
-	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Now Playing", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 255));
+
+	TextOut(L"Now Playing", 10, 10, yellow);
+
 	int nChars = -1;
-	const WCHAR* filename = GetFilename(g_pszCurrentTrackPath,&nChars);
-	::DrawText(g_hDJWindowDC,  filename, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
-	static WCHAR szTime[100];
-	GetTimeString(szTime, 99, g_currentTrackStartStopPositions.startPos);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Start:", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left += timeIndent;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 255));
-	::DrawText(g_hDJWindowDC, szTime, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left -= timeIndent;
+	const WCHAR* filename = GetFilename(g_pszCurrentTrackPath, &nChars);
+	TextOut(filename, 10, 30, white, nChars);
 
-	GetTimeString(szTime, 99, g_currentTrackStartStopPositions.stopPos);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Stop:", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left += timeIndent;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 255));
-	::DrawText(g_hDJWindowDC, szTime, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left -= timeIndent;
+	TimeOut(g_currentTrackStartStopPositions.startPos, 60, 50, cyan);
+	TextOut(L"Start:", 10, 50, green);
 
-	textRect.top += spacing+10;
-	textRect.bottom += spacing+10;
-	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Next Track", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(255, 255, 255));
-	filename = GetFilename(g_pszNextTrackPath,&nChars);
-	::DrawText(g_hDJWindowDC, filename, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_PATH_ELLIPSIS);
-	GetTimeString(szTime, 99, g_nextTrackStartStopPositions.startPos);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Start:", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left += timeIndent;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 255));
-	::DrawText(g_hDJWindowDC, szTime, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left -= timeIndent;
+	TimeOut(g_currentTrackStartStopPositions.stopPos, 60, 70, cyan);
+	TextOut(L"Stop:", 10, 70, green);
 
-	GetTimeString(szTime, 99, g_nextTrackStartStopPositions.stopPos);
-	textRect.top += spacing;
-	textRect.bottom += spacing;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 50));
-	::DrawText(g_hDJWindowDC, L"Stop:", -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
-	textRect.left += timeIndent;
-	::SetTextColor(g_hDJWindowDC, RGB(50, 255, 255));
-	::DrawText(g_hDJWindowDC, szTime, -1, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
+	TextOut(L"Next Track", 10, 100, yellow);
 
+	filename = GetFilename(g_pszNextTrackPath, &nChars);
+	TextOut(filename, 10, 120, white, nChars);
+
+	TimeOut(g_nextTrackStartStopPositions.startPos, 60, 140, cyan);
+	TextOut(L"Start:", 10, 140, green);
+
+	TimeOut(g_nextTrackStartStopPositions.stopPos, 60, 160, cyan);
+	TextOut(L"Stop:", 10, 160, green);
 }
 
 LRESULT CALLBACK DJWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
