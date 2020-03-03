@@ -115,7 +115,8 @@ bool ShouldPlayNextTrack() {
 			return time > stopPos;
 		}
 	}
-	return false;
+	LRESULT isPlayingResult = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_ISPLAYING);
+	return !isPlayingResult;
 }
 
 bool RequestFileHasBeenModified() {
