@@ -41,6 +41,8 @@ typedef struct {
 typedef struct StartStopPositions {
 	DWORD startPos;
 	DWORD stopPos;
+	DWORD audioStopPos;
+	DWORD cdgStopPos;
 } StartStopPositions;
 
 // The CDG data packet structure.

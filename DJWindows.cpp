@@ -66,11 +66,24 @@ void TimeOut(DWORD time, int x, int y, COLORREF color) {
 	TextOut(szTime, x, y, color);
 }
 
+void KaraokeTimeOut(StartStopPositions *pPosses, int x, int y, COLORREF color) {
+	if (pPosses->cdgStopPos != MAXUINT32) {
+		static WCHAR szAudioStopTime[100];
+		static WCHAR szCDGStopTime[100];
+		GetTimeString(szAudioStopTime, 99, pPosses->audioStopPos);
+		GetTimeString(szCDGStopTime, 99, pPosses->cdgStopPos);
+		static WCHAR szMessage[100];
+		wsprintf(szMessage, L"(Audio: %s, CDG: %s)", szAudioStopTime, szCDGStopTime);
+		TextOut(szMessage, x, y, color);
+	}
+}
+
 void DrawInfo() {
 	COLORREF yellow = RGB(255, 255, 50);
 	COLORREF white = RGB(255, 255, 255);
 	COLORREF cyan = RGB(50, 255, 255);
 	COLORREF green = RGB(50, 255, 50);
+	COLORREF magenta = RGB(255,50,255);
 
 	RECT rect;
 	::GetClientRect(g_hDJWindow, &rect);
@@ -88,6 +101,7 @@ void DrawInfo() {
 	TextOut(L"Start:", 10, 50, green);
 
 	TimeOut(g_currentTrackStartStopPositions.stopPos, 60, 70, cyan);
+	KaraokeTimeOut(&g_currentTrackStartStopPositions, 130, 70, magenta);
 	TextOut(L"Stop:", 10, 70, green);
 
 	TextOut(L"Next Track", 10, 100, yellow);
@@ -99,6 +113,7 @@ void DrawInfo() {
 	TextOut(L"Start:", 10, 140, green);
 
 	TimeOut(g_nextTrackStartStopPositions.stopPos, 60, 160, cyan);
+	KaraokeTimeOut(&g_nextTrackStartStopPositions, 130, 160, magenta);
 	TextOut(L"Stop:", 10, 160, green);
 }
 

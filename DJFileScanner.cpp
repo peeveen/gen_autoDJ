@@ -34,7 +34,7 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
   }
 }
 
-StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold, ULONG stopLimit) {
+StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold) {
   DWORD startPos = MAXUINT32, stopPos = MAXUINT32;
   if(start)
     for (DWORD f = 0; f < cbSize; f += channels) {
@@ -49,9 +49,8 @@ StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channel
       }
     }
   DWORD songEnd = (DWORD)(((((double)cbSize - channels) * channels) / (double)bytesPerSecond) * 1000.0);
-  DWORD upperLimit = (DWORD)((stopLimit / 1000.0) * bytesPerSecond);
-  stopPos = stopLimit > songEnd ? songEnd : stopLimit;
-  for (DWORD f = cbSize - channels; f > upperLimit; f -= channels) {
+  stopPos =songEnd;
+  for (DWORD f = cbSize - channels; f > 0; f -= channels) {
     double total = 0;
     for (int g = 0; g < channels; ++g) {
       total += abs(pWavData[f + g]);
@@ -62,7 +61,7 @@ StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channel
       break;
     }
   }
-  return { startPos,stopPos };
+  return { startPos,stopPos,stopPos,MAXUINT32 };
 }
 
 struct GetStartStopPositionsParams {
@@ -78,7 +77,6 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
   DWORD result = 0;
   IMFSourceReader* pReader = NULL;
 
-  bool isKaraoke = false;
   WCHAR szCDGTest[MAX_PATH + 1] = { '0' };
   wcscpy_s(szCDGTest, pParams->szFilename);
   WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
@@ -101,7 +99,7 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
               BYTE instr = pCDGFileContents[f].instruction & 0x3F;
               // CDG_INSTR_TILE_BLOCK_XOR
               if (cmd == 0x09 && instr == 38) {
-                karaokeLimit = (ULONG)((f / 300.0) * 1000.0);
+                karaokeLimit = (ULONG)((f / 300.0) * 1000.0)+2000;
                 break;
               }
             }
@@ -186,11 +184,16 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                           cbWavData /= sizeof(short);
 
                           Normalize(pWavData, channels, cbWavData);
+                          StartStopPositions posses = GetStartStopPositions(pParams->isNextTrack, pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, karaokeLimit ? g_nKaraokeStopThreshold : g_nStopThreshold);
+                          if (karaokeLimit) {
+                            posses.cdgStopPos = karaokeLimit;
+                            if (posses.stopPos < karaokeLimit)
+                              posses.stopPos = karaokeLimit;
+                          }
                           ::WaitForSingleObject(pParams->hDataMutex,INFINITE);
-                          StartStopPositions posses=GetStartStopPositions(pParams->isNextTrack,pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, isKaraoke ? g_nKaraokeStopThreshold : g_nStopThreshold, karaokeLimit);
                           (*pParams->pSSPos) = posses;
-                          ::ReleaseMutex(pParams->hDataMutex);
                           wcscpy_s(pParams->pszFilenameTarget,MAX_PATH, pParams->szFilename);
+                          ::ReleaseMutex(pParams->hDataMutex);
                           ::InvalidateRect(g_hDJWindow, NULL, FALSE);
                           result = 1;
                           free(pWavData);
