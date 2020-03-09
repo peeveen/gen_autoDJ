@@ -8,6 +8,7 @@
 
 WCHAR** g_ppszTrackPaths=NULL;
 int g_nTracks=0;
+bool g_bSeeded = false;
 
 void ReadTrackFile(const WCHAR* pszPath, WCHAR*** pppszList, int* pnCount) {
 	FILE* pFile = NULL;
@@ -90,7 +91,10 @@ WCHAR* GetNextTrack(bool *pbRequest) {
 			ReadTrackList();
 		}
 		if (g_nTracks) {
-			srand((UINT)time(NULL));
+			if (!g_bSeeded) {
+				srand((UINT)time(NULL));
+				g_bSeeded = true;
+			}
 			int nTrackIndex = rand() % g_nTracks;
 			pszTrack = _wcsdup(g_ppszTrackPaths[nTrackIndex]);
 			free(g_ppszTrackPaths[nTrackIndex]);
