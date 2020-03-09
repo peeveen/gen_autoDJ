@@ -35,8 +35,8 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
 }
 
 StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold) {
-  DWORD startPos = MAXUINT32, stopPos = MAXUINT32;
-  if(start)
+  DWORD startPos = MAXUINT32, startPos2 = MAXUINT32, stopPos = MAXUINT32;
+  if (start) {
     for (DWORD f = 0; f < cbSize; f += channels) {
       double total = 0;
       for (int g = 0; g < channels; ++g) {
@@ -44,10 +44,31 @@ StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channel
       }
       total /= channels;
       if (total > startThreshold) {
-        startPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+        startPos = (DWORD)((((double)f * sizeof(short)) / (double)bytesPerSecond) * 1000.0);
         break;
       }
     }
+    // On the offchance that this song starts with a loud noise, then a build up, we check
+    // again from a point three seconds later. If they are substantially different, we take the
+    // second value.
+    // Offenders in the category: Money For Nothing, Like A Prayer, etc.
+    DWORD f =(DWORD) (startPos / 1000.0)+3;
+    f *= (DWORD)bytesPerSecond;
+    f /= sizeof(short);
+    for (; f < cbSize; f += channels) {
+      double total = 0;
+      for (int g = 0; g < channels; ++g) {
+        total += abs(pWavData[f + g]);
+      }
+      total /= channels;
+      if (total > startThreshold) {
+        startPos2 = (DWORD)((((double)f * sizeof(short)) / (double)bytesPerSecond) * 1000.0);
+        break;
+      }
+    }
+    if (startPos2 - startPos > 4000)
+      startPos = startPos2;
+  }
   DWORD songEnd = (DWORD)(((((double)cbSize - channels) * channels) / (double)bytesPerSecond) * 1000.0);
   stopPos =songEnd;
   for (DWORD f = cbSize - channels; f > 0; f -= channels) {
@@ -57,7 +78,7 @@ StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channel
     }
     total /= channels;
     if (total > stopThreshold) {
-      stopPos = (DWORD)((((double)f * channels) / (double)bytesPerSecond) * 1000.0);
+      stopPos = (DWORD)((((double)f * sizeof(short)) / (double)bytesPerSecond) * 1000.0);
       break;
     }
   }
