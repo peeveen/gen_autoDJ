@@ -37,18 +37,18 @@ HANDLE g_hStopTimeWatcherEvent = NULL;
 HANDLE g_hCurrentTrackMutex = NULL;
 HANDLE g_hNextTrackMutex = NULL;
 HANDLE g_hPlayNextMutex = NULL;
-bool g_bNextTrackIsRequest=false;
+bool g_bNextTrackIsRequest = false;
 __time64_t g_requestFileLastModifiedTime = 0;
 
-void HandleInterruption(WCHAR *pszFileBeingPlayed) {
+void HandleInterruption(WCHAR* pszFileBeingPlayed) {
 	g_currentTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
-	GetStartStopPositions(false,pszFileBeingPlayed, g_pszCurrentTrackPath,&g_currentTrackStartStopPositions,g_hCurrentTrackMutex);
+	GetStartStopPositions(false, pszFileBeingPlayed, g_pszCurrentTrackPath, &g_currentTrackStartStopPositions, g_hCurrentTrackMutex);
 }
 
 void FindAndProcessNextTrack() {
 	WCHAR* pszTrackPath = GetNextTrack(&g_bNextTrackIsRequest);
 	if (pszTrackPath)
-		GetStartStopPositions(true, pszTrackPath, g_pszNextTrackPath,&g_nextTrackStartStopPositions,g_hNextTrackMutex);
+		GetStartStopPositions(true, pszTrackPath, g_pszNextTrackPath, &g_nextTrackStartStopPositions, g_hNextTrackMutex);
 }
 
 void PlayNextTrack() {
@@ -100,7 +100,7 @@ void OnTrackStarted() {
 	// If it's a different file from what we're expecting it to be, then the real DJ has
 	// started something manually. We need to calculate a new stop time.
 	if (pszFileBeingPlayed) {
-		WCHAR sz[MAX_PATH + 1]={'\0'};
+		WCHAR sz[MAX_PATH + 1] = { '\0' };
 		::WaitForSingleObject(g_hCurrentTrackMutex, INFINITE);
 		wcscpy_s(sz, g_pszCurrentTrackPath);
 		::ReleaseMutex(g_hCurrentTrackMutex);
@@ -112,7 +112,7 @@ void OnTrackStarted() {
 		DWORD stopPos = g_nextTrackStartStopPositions.stopPos;
 		::ReleaseMutex(g_hNextTrackMutex);
 
-		if(stopPos==MAXUINT32)
+		if (stopPos == MAXUINT32)
 			FindAndProcessNextTrack();
 	}
 }
@@ -126,14 +126,17 @@ bool ShouldPlayNextTrack() {
 
 	if (stopPos != MAXUINT32) {
 		DWORD time = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_GETOUTPUTTIME);
-		if (time >0) {
+		if (time > 0) {
 			time = (DWORD)(time * g_nTimeScaler);
-			should= time > stopPos;
+			should = time > stopPos;
 		}
 	}
 	if (!should) {
 		LRESULT isPlayingResult = ::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_ISPLAYING);
-		should = !isPlayingResult;
+		::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
+		bool hasNextTrack = wcslen(g_pszNextTrackPath) != 0;
+		::ReleaseMutex(g_hNextTrackMutex);
+		should = hasNextTrack && !isPlayingResult;
 	}
 	::ReleaseMutex(g_hPlayNextMutex);
 	return should;
@@ -148,7 +151,7 @@ bool RequestFileHasBeenModified() {
 			return true && !testOnly;
 		}
 	}
-	else if(testOnly)
+	else if (testOnly)
 		g_requestFileLastModifiedTime = 1;
 	return false;
 }
@@ -157,7 +160,7 @@ DWORD WINAPI TimeWatcher(LPVOID pParam) {
 	while (::WaitForSingleObject(g_hStopTimeWatcherEvent, 250) == WAIT_TIMEOUT) {
 		if (RequestFileHasBeenModified() && !g_bNextTrackIsRequest)
 			FindAndProcessNextTrack();
-		if(ShouldPlayNextTrack())
+		if (ShouldPlayNextTrack())
 			PlayNextTrack();
 	}
 	return 0;
@@ -179,13 +182,13 @@ LRESULT CALLBACK AutoDJWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	switch (uMsg) {
 	case WM_WA_IPC:
 		switch (lParam) {
-			case IPC_PLAYING_FILEW: {
-				// This message indicates that a new file has started playing. It might be the one
-				// we asked for, or it might be one that the "real" DJ has started manually. We need
-				// to check.
-				OnTrackStarted();
-				break;
-			}
+		case IPC_PLAYING_FILEW: {
+			// This message indicates that a new file has started playing. It might be the one
+			// we asked for, or it might be one that the "real" DJ has started manually. We need
+			// to check.
+			OnTrackStarted();
+			break;
+		}
 		}
 		break;
 	}
