@@ -5,5 +5,6 @@ An automatic DJ Winamp plugin, starting and stopping songs at configurable ampli
 * Skips past quiet/silent starts, and fades out before quiet/silent endings.
 * Manually start other tracks, and it will work around you.
 * Works with most audio formats, and karaoke tracks too.
+* Works with KaraokeManager to allow requests to be queued up.
 
 ![AutoDJ](/media/autoDJScreenshot.png)
