@@ -16,6 +16,9 @@ int init(void);
 void config(void);
 void quit(void);
 
+// Resets PaceMaker tempo, pitch & speed settings to zeroes
+#define PM_RESET (WM_APP+5)
+
 // The instance handle of this DLL.
 HINSTANCE g_hInstance = NULL;
 // Handle to the Winamp window.
@@ -74,16 +77,10 @@ void PlayNextTrack() {
 	g_nextTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
 	::ReleaseMutex(g_hNextTrackMutex);
 
-	// Reset pitch on Pacemaker.
-	INPUT ctrlShiftZ[] = {
-		{INPUT_KEYBOARD,{(WORD)VK_SHIFT,(WORD)0,(DWORD)0,(DWORD)0,(ULONG_PTR)NULL}},
-		{INPUT_KEYBOARD,{(WORD)VK_CONTROL,(WORD)0,(DWORD)0,(DWORD)0,(ULONG_PTR)NULL}},
-		{INPUT_KEYBOARD,{(WORD)0x5A,(WORD)0,(DWORD)0,(DWORD)0,(ULONG_PTR)NULL}},
-		{INPUT_KEYBOARD,{(WORD)0x5A,(WORD)0,(DWORD)KEYEVENTF_KEYUP,(DWORD)0,(ULONG_PTR)NULL}},
-		{INPUT_KEYBOARD,{(WORD)VK_CONTROL,(WORD)KEYEVENTF_KEYUP,(DWORD)0,(DWORD)0,(ULONG_PTR)NULL}},
-		{INPUT_KEYBOARD,{(WORD)VK_SHIFT,(WORD)KEYEVENTF_KEYUP,(DWORD)0,(DWORD)0,(ULONG_PTR)NULL}}
-	};
-	::SendInput(6, ctrlShiftZ, sizeof(INPUT));
+	// Reset pitch on Pacemaker, if it is running.
+	HWND pacemakerHwnd = ::FindWindowEx(NULL, NULL, NULL, L"PaceMaker Plug-in");
+	if (pacemakerHwnd)
+		::SendMessage(pacemakerHwnd, PM_RESET, 0, 0);
 
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, 0, IPC_DELETE);
 	::SendMessage(g_hWinampWindow, WM_WA_IPC, (WPARAM)&w, IPC_PLAYFILEW);
