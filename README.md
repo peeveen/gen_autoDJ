@@ -8,8 +8,9 @@ An automatic DJ Winamp plugin, starting and stopping songs at configurable ampli
 
 ![AutoDJ](/media/autoDJScreenshot.png)
 
-#Usage
+# Usage
 
+- Download the latest release ZIP file and extract the contents.
 - Edit the INI file with the paths of your playlist and requests files, and your preferred start/stop amplitudes.
 - Copy the DLL and the INI to your Winamp plugins folder (usually `C:\Program Files (x86)\Winamp\Plugins`)
 - Restart Winamp, and the AutoDJ window should appear.
