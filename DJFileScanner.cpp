@@ -93,13 +93,9 @@ struct GetStartStopPositionsParams {
   bool isNextTrack;
 };
 
-DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
-  GetStartStopPositionsParams *pParams= (GetStartStopPositionsParams*)pParam;
-  DWORD result = 0;
-  IMFSourceReader* pReader = NULL;
-
-  WCHAR szCDGTest[MAX_PATH + 1] = { '0' };
-  wcscpy_s(szCDGTest, pParams->szFilename);
+ULONG GetKaraokeLimit(LPCTSTR pszFilename) {
+  WCHAR szCDGTest[MAX_PATH + 1] = { '\0' };
+  wcscpy_s(szCDGTest, pszFilename);
   WCHAR* pszLastDot = wcsrchr(szCDGTest, '.');
   ULONG karaokeLimit = 0;
   if (pszLastDot) {
@@ -120,7 +116,7 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
               BYTE instr = pCDGFileContents[f].instruction & 0x3F;
               // CDG_INSTR_TILE_BLOCK_XOR
               if (cmd == 0x09 && instr == 38) {
-                karaokeLimit = (ULONG)((f / 300.0) * 1000.0)+2000;
+                karaokeLimit = (ULONG)((f / 300.0) * 1000.0) + 2000;
                 break;
               }
             }
@@ -131,6 +127,16 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
       }
     }
   }
+  return karaokeLimit;
+}
+
+DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
+  GetStartStopPositionsParams *pParams= (GetStartStopPositionsParams*)pParam;
+  DWORD result = 0;
+  IMFSourceReader* pReader = NULL;
+
+  // In case we're playing karaoke, find where the karaoke file ends.
+  ULONG karaokeLimit = GetKaraokeLimit(pParams->szFilename);
 
   HRESULT hr = ::MFCreateSourceReaderFromURL(pParams->szFilename, NULL, &pReader);
   if (SUCCEEDED(hr)) {
@@ -168,11 +174,6 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                         cbAudioClipSize = min(cbAudioClipSize, MAXDWORD);
                         cbAudioClipSize = ((cbAudioClipSize / cbBlockSize) + channels) * cbBlockSize;
 
-//                        WCHAR sz[100];
-//                        int nSeconds = (int)songLengthSeconds;
-//                        wsprintf(sz, L"sampleSize=%d\nchannels=%d\nsongLength=%d\nbytesPerSecond=%d\nbufferSize=%d",sampleSize,channels,nSeconds, (long)cbBytesPerSecond,(long)cbAudioClipSize);
-//                        ::MessageBox(NULL, sz, L"", MB_OK);
-
                         DWORD dwFlags(0);
                         IMFSample* pSample = NULL;
                         DWORD cbWavData(0);
@@ -205,14 +206,14 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                           cbWavData /= sizeof(short);
 
                           Normalize(pWavData, channels, cbWavData);
-                          StartStopPositions posses = GetStartStopPositions(pParams->isNextTrack, pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, karaokeLimit ? g_nKaraokeStopThreshold : g_nStopThreshold);
+                          StartStopPositions positions = GetStartStopPositions(pParams->isNextTrack, pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, karaokeLimit ? g_nKaraokeStopThreshold : g_nStopThreshold);
                           if (karaokeLimit) {
-                            posses.cdgStopPos = karaokeLimit;
-                            if (posses.stopPos < karaokeLimit)
-                              posses.stopPos = karaokeLimit;
+                            positions.cdgStopPos = karaokeLimit;
+                            if (positions.stopPos < karaokeLimit)
+                              positions.stopPos = karaokeLimit;
                           }
                           ::WaitForSingleObject(pParams->hDataMutex,INFINITE);
-                          (*pParams->pSSPos) = posses;
+                          (*pParams->pSSPos) = positions;
                           wcscpy_s(pParams->pszFilenameTarget,MAX_PATH, pParams->szFilename);
                           ::ReleaseMutex(pParams->hDataMutex);
                           ::InvalidateRect(g_hDJWindow, NULL, FALSE);

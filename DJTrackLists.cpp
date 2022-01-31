@@ -24,8 +24,9 @@ void ReadTrackFile(const WCHAR* pszPath, WCHAR*** pppszList, int* pnCount) {
 					*pszNewLine = '\0';
 				int len = wcslen(szBuffer);
 				++* pnCount;
-				*pppszList = (WCHAR**)realloc(*pppszList, sizeof(WCHAR*) * (*pnCount));
-				if (*pppszList) {
+				WCHAR **reallocedStringArray = (WCHAR**)realloc(*pppszList, sizeof(WCHAR*) * (*pnCount));
+				if (reallocedStringArray) {
+					*pppszList = reallocedStringArray;
 					++len;
 					WCHAR* pszNewString = (WCHAR*)malloc(sizeof(WCHAR) * len);
 					if (pszNewString) {

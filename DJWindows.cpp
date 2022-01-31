@@ -35,7 +35,7 @@ const WCHAR *GetFilename(const WCHAR* pszPath,int *pnChars) {
 	if (pszFilename) {
 		++pszFilename;
 		*pnChars = wcslen(pszFilename);
-		WCHAR sz[MAX_PATH + 1];
+		WCHAR sz[MAX_PATH + 1] = { '\0' };
 		wcscpy_s(sz, pszFilename);
 		_wcslwr_s(sz);
 		WCHAR* ext = wcsstr(sz, L".m4a");
