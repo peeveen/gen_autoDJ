@@ -140,7 +140,7 @@
       <AdditionalDependencies>mfplat.lib;mfreadwrite.lib;mfuuid.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(OutDir)\$(TargetFileName)" "C:\Program Files (x86)\Winamp\Plugins" &amp;&amp; copy "$(SolutionDir)\gen_autoDJ.ini" "C:\Program Files (x86)\Winamp\Plugins"</Command>
+      <Command>copy "$(OutDir)\$(TargetFileName)" "C:\Program Files (x86)\Winamp\Plugins" &amp; robocopy "$(SolutionDir)." "C:\Program Files (x86)\Winamp\Plugins" "gen_autoDJ.ini" /XC /XN /XO</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
