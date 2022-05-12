@@ -10,3 +10,4 @@ extern int g_nStartThreshold;
 extern int g_nStopThreshold;
 extern int g_nKaraokeStopThreshold;
 extern double g_nTimeScaler;
+extern bool g_bShowStopTimeFromEnd;

@@ -34,7 +34,7 @@ void Normalize(short* pWavData, int channels, DWORD cbSize) {
   }
 }
 
-StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, short startThreshold, short stopThreshold) {
+StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channels, UINT64 bytesPerSecond, DWORD cbSize, double songLengthMilliseconds, short startThreshold, short stopThreshold) {
   DWORD startPos = MAXUINT32, startPos2 = MAXUINT32, stopPos = MAXUINT32;
   if (start) {
     for (DWORD f = 0; f < cbSize; f += channels) {
@@ -82,7 +82,7 @@ StartStopPositions GetStartStopPositions(bool start,short* pWavData, int channel
       break;
     }
   }
-  return { startPos,stopPos,stopPos,MAXUINT32 };
+  return { (DWORD)songLengthMilliseconds, startPos, stopPos, stopPos, MAXUINT32 };
 }
 
 struct GetStartStopPositionsParams {
@@ -168,6 +168,7 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                         UINT32 sampleSize = ::MFGetAttributeUINT32(pUncompressedAudioType, MF_MT_SAMPLE_SIZE, 0);
                         UINT64 cbBytesPerSecond = ::MFGetAttributeUINT32(pUncompressedAudioType, MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 0);
                         UINT64 songLength = prop.uhVal.QuadPart;
+                        double songLengthMilliseconds = (songLength / 10000.0);
                         double songLengthSeconds = (songLength / 10000000.0);
                         // Allocate an extra second just to be on the safe side. Sometimes it overspills.
                         UINT64 cbAudioClipSize = (UINT64)(cbBytesPerSecond * (songLengthSeconds+1));
@@ -206,7 +207,7 @@ DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
                           cbWavData /= sizeof(short);
 
                           Normalize(pWavData, channels, cbWavData);
-                          StartStopPositions positions = GetStartStopPositions(pParams->isNextTrack, pWavData, channels, cbBytesPerSecond, cbWavData, g_nStartThreshold, karaokeLimit ? g_nKaraokeStopThreshold : g_nStopThreshold);
+                          StartStopPositions positions = GetStartStopPositions(pParams->isNextTrack, pWavData, channels, cbBytesPerSecond, cbWavData, songLengthMilliseconds, g_nStartThreshold, karaokeLimit ? g_nKaraokeStopThreshold : g_nStopThreshold);
                           if (karaokeLimit) {
                             positions.cdgStopPos = karaokeLimit;
                             if (positions.stopPos < karaokeLimit)

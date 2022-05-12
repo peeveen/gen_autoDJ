@@ -19,6 +19,8 @@ int g_nStopThreshold = 15000;
 int g_nKaraokeStopThreshold = 4000;
 // Stupid scaler for WinAmp time bug.
 double g_nTimeScaler = 1.00466;
+// Should stop time be shown as time from end of track?
+bool g_bShowStopTimeFromEnd = true;
 
 void TrimLeading(WCHAR* pszString) {
 	WCHAR* pszPointer = pszString;
@@ -99,6 +101,10 @@ void SetRequestedTracksFilePath(WCHAR* pszPrefLine) {
 	SetString(pszPrefLine, L"requestedtracksfilepath", g_szRequestedTracksFilePath);
 }
 
+void SetShowStopTimeFromEndFlag(WCHAR* pszPrefLine) {
+	SetBool(pszPrefLine, L"showstoptimefromend", &g_bShowStopTimeFromEnd);
+}
+
 bool SetINIPath() {
 	g_szINIPath[0] = '\0';
 	if (GetModuleFileName(g_hInstance, g_szINIPath, MAX_PATH)) {
@@ -126,6 +132,7 @@ bool ReadPrefs() {
 				SetStartThreshold(szBuffer);
 				SetStopThreshold(szBuffer);
 				SetKaraokeStopThreshold(szBuffer);
+				SetShowStopTimeFromEndFlag(szBuffer);
 			}
 			fclose(pFile);
 			return true;

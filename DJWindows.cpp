@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "resource.h"
 #include "DJData.h"
+#include "DJPrefs.h"
 
 // Window class names.
 const WCHAR* g_pszDJWindowClassName = L"DJInfo";
@@ -17,15 +18,20 @@ HICON g_hIcon = NULL;
 HDC g_hDJWindowDC = NULL;
 HWND g_hDJWindow = NULL;
 
-void GetTimeString(WCHAR* szBuffer, int size, DWORD time) {
+void GetTimeString(WCHAR* szBuffer, int size, DWORD time, DWORD songLength, bool remaining = true) {
 	if (time >= MAXUINT32-1)
 		wcscpy_s(szBuffer, size, L"n/a");
 	else {
+		WCHAR sign[2] = L"\0";
+		if (remaining) {
+			sign[0] = '-';
+			time = songLength - time;
+		}
 		int seconds = time / 1000;
 		int mins = seconds / 60;
 		int tenths = (time - (seconds * 1000)) / 100;
 		seconds -= (mins * 60);
-		wsprintf(szBuffer, L"%02d:%02d.%d", mins,seconds, tenths);
+		wsprintf(szBuffer, L"%s%02d:%02d.%d", sign, mins,seconds, tenths);
 	}
 }
 
@@ -60,18 +66,18 @@ void TextOut(const WCHAR* pszText, int x, int y, COLORREF color, int nChars=-1) 
 	::DrawText(g_hDJWindowDC, pszText, nChars, &textRect, DT_NOPREFIX | DT_TOP | DT_LEFT | DT_END_ELLIPSIS);
 }
 
-void TimeOut(DWORD time, int x, int y, COLORREF color) {
+void TimeOut(DWORD time, DWORD songLength, int x, int y, COLORREF color, bool remaining = true) {
 	static WCHAR szTime[100];
-	GetTimeString(szTime, 99, time);
+	GetTimeString(szTime, 99, time, songLength, remaining);
 	TextOut(szTime, x, y, color);
 }
 
-void KaraokeTimeOut(StartStopPositions *pPosses, int x, int y, COLORREF color) {
+void KaraokeTimeOut(StartStopPositions *pPosses, int x, int y, COLORREF color, bool remaining = true) {
 	if (pPosses->cdgStopPos != MAXUINT32) {
 		static WCHAR szAudioStopTime[100];
 		static WCHAR szCDGStopTime[100];
-		GetTimeString(szAudioStopTime, 99, pPosses->audioStopPos);
-		GetTimeString(szCDGStopTime, 99, pPosses->cdgStopPos);
+		GetTimeString(szAudioStopTime, 99, pPosses->audioStopPos, pPosses->songLength, remaining);
+		GetTimeString(szCDGStopTime, 99, pPosses->cdgStopPos, pPosses->songLength, remaining);
 		static WCHAR szMessage[100];
 		wsprintf(szMessage, L"(Audio: %s, CDG: %s)", szAudioStopTime, szCDGStopTime);
 		TextOut(szMessage, x, y, color);
@@ -97,10 +103,10 @@ void DrawInfo() {
 	const WCHAR* filename = GetFilename(g_pszCurrentTrackPath, &nChars);
 	TextOut(filename, 10, 30, white, nChars);
 
-	TimeOut(g_currentTrackStartStopPositions.startPos, 60, 50, cyan);
+	TimeOut(g_currentTrackStartStopPositions.startPos, g_currentTrackStartStopPositions.songLength, 60, 50, cyan, false);
 	TextOut(L"Start:", 10, 50, green);
 
-	TimeOut(g_currentTrackStartStopPositions.stopPos, 60, 70, cyan);
+	TimeOut(g_currentTrackStartStopPositions.stopPos, g_currentTrackStartStopPositions.songLength, 60, 70, cyan, g_bShowStopTimeFromEnd);
 	KaraokeTimeOut(&g_currentTrackStartStopPositions, 130, 70, magenta);
 	TextOut(L"Stop:", 10, 70, green);
 
@@ -109,11 +115,11 @@ void DrawInfo() {
 	filename = GetFilename(g_pszNextTrackPath, &nChars);
 	TextOut(filename, 10, 120, white, nChars);
 
-	TimeOut(g_nextTrackStartStopPositions.startPos, 60, 140, cyan);
+	TimeOut(g_nextTrackStartStopPositions.startPos, g_nextTrackStartStopPositions.songLength, 60, 140, cyan, false);
 	TextOut(L"Start:", 10, 140, green);
 
-	TimeOut(g_nextTrackStartStopPositions.stopPos, 60, 160, cyan);
-	KaraokeTimeOut(&g_nextTrackStartStopPositions, 130, 160, magenta);
+	TimeOut(g_nextTrackStartStopPositions.stopPos, g_nextTrackStartStopPositions.songLength, 60, 160, cyan, g_bShowStopTimeFromEnd);
+	KaraokeTimeOut(&g_nextTrackStartStopPositions, 130, 160, magenta, g_bShowStopTimeFromEnd);
 	TextOut(L"Stop:", 10, 160, green);
 }
 

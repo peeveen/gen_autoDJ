@@ -44,7 +44,7 @@ bool g_bNextTrackIsRequest = false;
 __time64_t g_requestFileLastModifiedTime = 0;
 
 void HandleInterruption(WCHAR* pszFileBeingPlayed) {
-	g_currentTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
+	g_currentTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
 	GetStartStopPositions(false, pszFileBeingPlayed, g_pszCurrentTrackPath, &g_currentTrackStartStopPositions, g_hCurrentTrackMutex);
 }
 
@@ -74,7 +74,7 @@ void PlayNextTrack() {
 
 	::WaitForSingleObject(g_hNextTrackMutex, INFINITE);
 	g_pszNextTrackPath[0] = '\0';
-	g_nextTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
+	g_nextTrackStartStopPositions = { MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32,MAXUINT32 };
 	::ReleaseMutex(g_hNextTrackMutex);
 
 	// Reset pitch on Pacemaker, if it is running.

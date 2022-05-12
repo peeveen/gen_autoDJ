@@ -39,6 +39,7 @@ typedef struct {
 } enqueueFileWithMetaStructW;
 
 typedef struct StartStopPositions {
+	DWORD songLength;
 	DWORD startPos;
 	DWORD stopPos;
 	DWORD audioStopPos;
