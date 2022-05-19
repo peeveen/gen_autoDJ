@@ -12,6 +12,24 @@
 #include "DJPrefs.h"
 #include "DJWindows.h"
 
+// TagLib includes.
+#include <tag.h>
+#include <mpegfile.h>
+#include <privateframe.h>
+#include <id3v2tag.h>
+
+int SetTags(LPCTSTR pszFilename)
+{
+    TagLib::MPEG::File f(pszFilename);
+    TagLib::ID3v2::Tag* tags = (TagLib::ID3v2::Tag*)f.ID3v2Tag(true);
+    TagLib::ID3v2::PrivateFrame* privateFrame = new TagLib::ID3v2::PrivateFrame();
+    privateFrame->setOwner("https://github.com/peeveen/gen_autoDJ");
+    privateFrame->setData(TagLib::ByteVector("timing_data_here"));
+    tags->addFrame(privateFrame);
+    f.save();
+}
+
+
 void Normalize(short* pWavData, int channels, DWORD cbSize) {
   int max = 0, min = 0;
   for (DWORD f = 0; f < cbSize; f += channels) {
@@ -131,7 +149,7 @@ ULONG GetKaraokeLimit(LPCTSTR pszFilename) {
 }
 
 DWORD WINAPI GetStartStopPositionsThread(LPVOID pParam) {
-  GetStartStopPositionsParams *pParams= (GetStartStopPositionsParams*)pParam;
+  GetStartStopPositionsParams *pParams = (GetStartStopPositionsParams *)pParam;
   DWORD result = 0;
   IMFSourceReader* pReader = NULL;
 
